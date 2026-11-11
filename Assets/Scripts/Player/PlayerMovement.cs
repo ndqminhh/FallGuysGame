@@ -16,8 +16,12 @@ public class PlayerMovement : MonoBehaviour
     [Header("Respawn")]
     public float fallLimit = -5f;
 
+    [Header("Knockback")]
+    public float knockbackDecay = 8f;
+
     private CharacterController controller;
     private Vector3 velocity;
+    private Vector3 knockbackVelocity;
     private Vector3 spawnPosition;
 
     void Start()
@@ -36,15 +40,11 @@ public class PlayerMovement : MonoBehaviour
         bool grounded = controller.isGrounded;
 
         if (grounded && velocity.y < 0f)
-        {
             velocity.y = -2f;
-        }
 
         if (Input.GetKeyDown(KeyCode.Space) && grounded)
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
-
-            Debug.Log("PLAYER JUMPED!");
         }
 
         float horizontal = Input.GetAxisRaw("Horizontal");
@@ -63,33 +63,38 @@ public class PlayerMovement : MonoBehaviour
             forward.Normalize();
             right.Normalize();
 
-            direction = (forward * vertical + right * horizontal)
-                .normalized;
+            direction = (forward * vertical + right * horizontal).normalized;
         }
 
-        // Rotate player
         if (direction.sqrMagnitude > 0.01f)
         {
-            Quaternion targetRotation =
-                Quaternion.LookRotation(direction);
+            Quaternion targetRotation = Quaternion.LookRotation(direction);
 
-            transform.rotation = Quaternion.Slerp(
-                transform.rotation,
-                targetRotation,
-                rotationSpeed * Time.deltaTime
-            );
+            transform.rotation = Quaternion.Slerp(transform.rotation,targetRotation,rotationSpeed * Time.deltaTime);
         }
 
         velocity.y += gravity * Time.deltaTime;
 
-        Vector3 movement = direction * moveSpeed + Vector3.up * velocity.y;
+        Vector3 movement = direction * moveSpeed + knockbackVelocity + Vector3.up * velocity.y;
 
         controller.Move(movement * Time.deltaTime);
 
+        knockbackVelocity = Vector3.MoveTowards(knockbackVelocity, Vector3.zero, knockbackDecay * Time.deltaTime);
+
         if (transform.position.y < fallLimit)
-        {
             Respawn();
-        }
+    }
+
+    public void ApplyKnockback(Vector3 direction, float strength)
+    {
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return;
+
+        knockbackVelocity = direction.normalized * strength;
+
+        velocity.y = Mathf.Max(velocity.y, 4.5f);
     }
 
     public void SetCheckpoint(Vector3 position)
@@ -100,8 +105,13 @@ public class PlayerMovement : MonoBehaviour
     public void Respawn()
     {
         controller.enabled = false;
+
+        transform.SetParent(null, true);
+
         transform.position = spawnPosition;
         velocity = Vector3.zero;
+        knockbackVelocity = Vector3.zero;
+
         controller.enabled = true;
     }
 }
